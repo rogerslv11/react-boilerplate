@@ -1,90 +1,68 @@
-# syntax = docker/dockerfile:1.7
+# =============================================================================
+# Stage 1 — Builder
+# =============================================================================
+FROM node:22-bookworm-slim AS builder
 
-# ----------------------------------------------------------------------------
-# Stage 1: base — install Ruby and project gems
-# ----------------------------------------------------------------------------
-FROM ruby:3.3-slim-bookworm AS base
-
-ENV BUNDLE_PATH=/usr/local/bundle \
-    BUNDLE_JOBS=4 \
-    BUNDLE_RETRY=3 \
-    BUNDLE_WITHOUT='development:test' \
-    LANG=C.UTF-8 \
-    LC_ALL=C.UTF-8
-
-RUN apt-get update -qq && \
-    apt-get install -y --no-install-recommends \
-        build-essential \
-        libpq-dev \
-        libyaml-dev \
-        postgresql-client \
-        curl \
-        tini && \
-    rm -rf /var/lib/apt/lists/*
+ENV NODE_ENV=build \
+    NPM_CONFIG_LOGLEVEL=warn \
+    CI=true
 
 WORKDIR /app
 
-# Install gems first to leverage Docker layer caching
-COPY Gemfile Gemfile.lock ./
-RUN bundle config set --local path "${BUNDLE_PATH}" && \
-    bundle install --jobs ${BUNDLE_JOBS} --retry ${BUNDLE_RETRY}
+# Install OpenSSL — required by Prisma engines for PostgreSQL connections
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends openssl ca-certificates \
+ && rm -rf /var/lib/apt/lists/*
 
-# ----------------------------------------------------------------------------
-# Stage 2: dev — full toolchain, used for development with hot reload
-# ----------------------------------------------------------------------------
-FROM base AS dev
+# Install deps separately to leverage layer cache
+COPY package.json package-lock.json* ./
+COPY prisma ./prisma
 
-ENV BUNDLE_WITHOUT='' \
-    APP_ENV=development
+RUN npm install --no-audit --no-fund
 
-RUN apt-get update -qq && \
-    apt-get install -y --no-install-recommends git && \
-    rm -rf /var/lib/apt/lists/*
+# Generate Prisma Client before copying source (so the client matches schema.prisma)
+RUN npx prisma generate
 
-COPY . .
+# Build the application
+COPY tsconfig.json tsconfig.build.json nest-cli.json ./
+COPY src ./src
 
-EXPOSE 4567
+RUN npm run build
 
-ENTRYPOINT ["/usr/bin/tini", "--"]
-CMD ["bundle", "exec", "puma", "-C", "config/puma.rb", "-b", "tcp://0.0.0.0:4567"]
+# Remove dev dependencies for a leaner production install
+RUN npm prune --omit=dev
 
-# ----------------------------------------------------------------------------
-# Stage 3: prod — production image, runs as non-root, slim
-# ----------------------------------------------------------------------------
-FROM base AS prod
 
-ENV APP_ENV=production \
-    APP_HOST=0.0.0.0 \
-    APP_PORT=4567 \
-    RAILS_SERVE_STATIC_FILES=true
+# =============================================================================
+# Stage 2 — Runtime
+# =============================================================================
+FROM node:22-bookworm-slim AS runner
 
-COPY . .
+ENV NODE_ENV=production \
+    PORT=3000
+
+WORKDIR /app
+
+# Runtime deps: openssl for Prisma, tini for proper signal handling
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends openssl ca-certificates tini curl \
+ && rm -rf /var/lib/apt/lists/*
 
 # Create non-root user
-RUN groupadd --system --gid 1000 app && \
-    useradd --system --uid 1000 --gid app --shell /bin/bash --create-home app && \
-    chown -R app:app /app && \
-    mkdir -p /app/tmp/pids /app/log && \
-    chown -R app:app /app/tmp /app/log
+RUN groupadd --system --gid 1001 nodejs \
+ && useradd --system --uid 1001 --gid nodejs --create-home --shell /bin/bash nestjs
 
-USER app
+# Copy production artifacts
+COPY --from=builder --chown=nestjs:nodejs /app/node_modules ./node_modules
+COPY --from=builder --chown=nestjs:nodejs /app/dist ./dist
+COPY --from=builder --chown=nestjs:nodejs /app/prisma ./prisma
+COPY --from=builder --chown=nestjs:nodejs /app/package.json ./package.json
 
-EXPOSE 4567
+USER nestjs
 
+EXPOSE 3000
+
+# Tini ensures graceful shutdown and proper signal forwarding
 ENTRYPOINT ["/usr/bin/tini", "--"]
-CMD ["bundle", "exec", "puma", "-C", "config/puma.rb"]
 
-# ----------------------------------------------------------------------------
-# Stage 4: test — runs the RSpec suite
-# ----------------------------------------------------------------------------
-FROM base AS test
-
-ENV APP_ENV=test \
-    BUNDLE_WITHOUT=''
-
-RUN bundle config set --local without ''
-
-COPY . .
-
-ENTRYPOINT ["/usr/bin/tini", "--"]
-CMD ["bundle", "exec", "rspec"]
+CMD ["node", "dist/main.js"]
