@@ -1,8 +1,6 @@
 import { Injectable } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 
-import type { AuthConfig } from '@/config/auth.config';
 import type { JwtPayload } from '@/shared/contracts/auth.contract';
 
 export interface AccessTokenPayload {
@@ -16,44 +14,32 @@ export interface RefreshTokenPayload {
   jti: string;
 }
 
-export interface IssuedTokens {
-  accessToken: string;
-  accessExpiresIn: number;
-  refreshToken: string;
-  refreshExpiresIn: number;
-  refreshTokenId: string;
+export interface TokenConfig {
+  accessSecret: string;
+  accessTtl: string;
+  refreshSecret: string;
+  refreshTtl: string;
 }
 
 @Injectable()
 export class TokenService {
-  private readonly accessSecret: string;
-  private readonly refreshSecret: string;
-  private readonly accessTtl: string;
-  private readonly refreshTtl: string;
-
   constructor(
     private readonly jwtService: JwtService,
-    configService: ConfigService,
-  ) {
-    const auth = configService.getOrThrow<AuthConfig>('auth');
-    this.accessSecret = auth.jwtSecret;
-    this.refreshSecret = auth.jwtRefreshSecret;
-    this.accessTtl = auth.jwtAccessTtl;
-    this.refreshTtl = auth.jwtRefreshTtl;
-  }
+    private readonly config: TokenConfig,
+  ) {}
 
   get accessTtlSeconds(): number {
-    return this.parseTtl(this.accessTtl);
+    return this.parseTtl(this.config.accessTtl);
   }
 
   get refreshTtlSeconds(): number {
-    return this.parseTtl(this.refreshTtl);
+    return this.parseTtl(this.config.refreshTtl);
   }
 
   signAccessToken(payload: AccessTokenPayload): { token: string; expiresIn: number } {
     const token = this.jwtService.sign({ ...payload, type: 'access' } satisfies JwtPayload, {
-      secret: this.accessSecret,
-      expiresIn: this.accessTtl as `${number}${'s' | 'm' | 'h' | 'd'}`,
+      secret: this.config.accessSecret,
+      expiresIn: this.config.accessTtl as `${number}${'s' | 'm' | 'h' | 'd'}`,
     });
     return { token, expiresIn: this.accessTtlSeconds };
   }
@@ -66,20 +52,20 @@ export class TokenService {
         type: 'refresh',
       },
       {
-        secret: this.refreshSecret,
-        expiresIn: this.refreshTtl as `${number}${'s' | 'm' | 'h' | 'd'}`,
+        secret: this.config.refreshSecret,
+        expiresIn: this.config.refreshTtl as `${number}${'s' | 'm' | 'h' | 'd'}`,
       },
     );
     return { token, expiresIn: this.refreshTtlSeconds };
   }
 
   verifyAccessToken(token: string): JwtPayload {
-    return this.jwtService.verify<JwtPayload>(token, { secret: this.accessSecret });
+    return this.jwtService.verify<JwtPayload>(token, { secret: this.config.accessSecret });
   }
 
   verifyRefreshToken(token: string): JwtPayload & { jti?: string } {
     return this.jwtService.verify<JwtPayload & { jti?: string }>(token, {
-      secret: this.refreshSecret,
+      secret: this.config.refreshSecret,
     });
   }
 

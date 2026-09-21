@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { JwtModule } from '@nestjs/jwt';
+import { JwtModule, JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { PassportModule } from '@nestjs/passport';
 import { TypeOrmModule } from '@nestjs/typeorm';
@@ -29,7 +29,24 @@ import { JwtStrategy } from './strategies/jwt.strategy';
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, TokenService, RefreshTokenService, JwtStrategy],
+  providers: [
+    AuthService,
+    RefreshTokenService,
+    {
+      provide: TokenService,
+      inject: [JwtService, ConfigService],
+      useFactory: (jwtService: JwtService, configService: ConfigService) => {
+        const auth = configService.getOrThrow<AuthConfig>('auth');
+        return new TokenService(jwtService, {
+          accessSecret: auth.jwtSecret,
+          accessTtl: auth.jwtAccessTtl,
+          refreshSecret: auth.jwtRefreshSecret,
+          refreshTtl: auth.jwtRefreshTtl,
+        });
+      },
+    },
+    JwtStrategy,
+  ],
   exports: [AuthService, TokenService, RefreshTokenService],
 })
 export class AuthModule {}

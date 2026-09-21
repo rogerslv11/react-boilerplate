@@ -1,45 +1,67 @@
-// Avoid importing @nestjs/config at runtime to side-step ESM-only distribution
-// issues. We instead use a pure JWT-layer test that exercises the actual signing
-// and TTL conversion logic without instantiating the full TokenService.
-
 import { JwtService } from '@nestjs/jwt';
 
-describe('TokenService (pure)', () => {
-  const jwt = new JwtService({
-    secret: 'a'.repeat(32),
-    signOptions: { expiresIn: '1h' },
+import { TokenService, type TokenConfig } from '../services/token.service';
+
+describe('TokenService', () => {
+  const config: TokenConfig = {
+    accessSecret: 'a'.repeat(32),
+    accessTtl: '15m',
+    refreshSecret: 'b'.repeat(32),
+    refreshTtl: '7d',
+  };
+  const jwtService = new JwtService({ secret: config.accessSecret });
+  let service: TokenService;
+
+  beforeEach(() => {
+    service = new TokenService(jwtService, config);
   });
 
-  function parseTtl(ttl: string): number {
-    const match = /^(\d+)([smhd])$/.exec(ttl);
-    if (!match) {
-      throw new Error(`Invalid TTL: ${ttl}`);
-    }
-    const multipliers: Record<string, number> = { s: 1, m: 60, h: 3600, d: 86400 };
-    return Number(match[1]) * multipliers[match[2]];
-  }
-
-  it('parseTtl returns seconds for each unit', () => {
-    expect(parseTtl('15s')).toBe(15);
-    expect(parseTtl('15m')).toBe(15 * 60);
-    expect(parseTtl('2h')).toBe(2 * 3600);
-    expect(parseTtl('7d')).toBe(7 * 86400);
-  });
-
-  it('parses access and refresh TTL used by TokenService', () => {
-    expect(parseTtl('15m')).toBe(900);
-    expect(parseTtl('7d')).toBe(7 * 86400);
-  });
-
-  it('signs and verifies a JWT access token with the configured secret', () => {
-    const token = jwt.sign(
-      { sub: 'user-id', email: 'a@b.com', type: 'access' },
-      { secret: 'a'.repeat(32), expiresIn: '15m' },
-    );
-    const decoded = jwt.verify<{ sub: string; type: string }>(token, {
-      secret: 'a'.repeat(32),
+  describe('ttl conversions', () => {
+    it('exposes access ttl in seconds', () => {
+      expect(service.accessTtlSeconds).toBe(900);
     });
-    expect(decoded.sub).toBe('user-id');
-    expect(decoded.type).toBe('access');
+
+    it('exposes refresh ttl in seconds', () => {
+      expect(service.refreshTtlSeconds).toBe(7 * 86400);
+    });
+  });
+
+  describe('access tokens', () => {
+    it('signs and verifies an access token', () => {
+      const { token, expiresIn } = service.signAccessToken({
+        sub: 'user-id',
+        email: 'a@b.com',
+        role: 'user',
+      });
+      expect(token).toBeDefined();
+      expect(expiresIn).toBe(900);
+
+      const decoded = service.verifyAccessToken(token);
+      expect(decoded.sub).toBe('user-id');
+      expect(decoded.type).toBe('access');
+      expect(decoded.email).toBe('a@b.com');
+      expect(decoded.role).toBe('user');
+    });
+
+    it('rejects access tokens signed with the refresh secret', () => {
+      const refreshJwt = new JwtService({ secret: config.refreshSecret });
+      const bad = refreshJwt.sign({ sub: 'x' }, { expiresIn: '1h' });
+      expect(() => service.verifyAccessToken(bad)).toThrow();
+    });
+  });
+
+  describe('refresh tokens', () => {
+    it('signs and verifies a refresh token with jti', () => {
+      const { token, expiresIn } = service.signRefreshToken({
+        sub: 'user-id',
+        jti: 'jti-1',
+      });
+      expect(expiresIn).toBe(7 * 86400);
+
+      const decoded = service.verifyRefreshToken(token);
+      expect(decoded.sub).toBe('user-id');
+      expect(decoded.jti).toBe('jti-1');
+      expect(decoded.type).toBe('refresh');
+    });
   });
 });

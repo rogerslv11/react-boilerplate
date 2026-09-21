@@ -23,7 +23,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
     const request = ctx.getRequest<Request & { id?: string }>();
     const requestId = request.id;
 
-    const { status, body, errorMessage } = this.normalize(exception, request);
+    const { status, body, errorMessage } = this.normalize(exception);
 
     if (status >= 500) {
       this.logger.error(
@@ -44,10 +44,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
     response.status(status).json(payload);
   }
 
-  private normalize(
-    exception: unknown,
-    _request: Request,
-  ): {
+  private normalize(exception: unknown): {
     status: number;
     body: Omit<ErrorResponseBody, 'requestId' | 'timestamp' | 'path'>;
     errorMessage: string;

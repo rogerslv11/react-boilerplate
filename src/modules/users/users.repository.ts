@@ -3,10 +3,9 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
 import { User } from './users.entity';
-import type { UserRepositoryInterface } from './interfaces/user-repository.interface';
 
 @Injectable()
-export class UsersRepository implements UserRepositoryInterface {
+export class UsersRepository {
   constructor(
     @InjectRepository(User)
     private readonly repository: Repository<User>,
