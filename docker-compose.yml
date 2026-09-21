@@ -54,15 +54,6 @@ services:
       - app-net
     restart: unless-stopped
 
-  # Optional Redis instance. Activate by setting REDIS_URL=redis://redis:6379/0
-  # and uncomment the `app` dependency + url below.
-  # redis:
-  #   image: redis:7-alpine
-  #   container_name: sinatra-boilerplate-redis
-  #   networks:
-  #     - app-net
-  #   restart: unless-stopped
-
 volumes:
   postgres-data:
   bundle:

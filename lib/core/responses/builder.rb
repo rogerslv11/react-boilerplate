@@ -6,27 +6,15 @@ module SinatraBoilerplate
     # consistency across the API.
     #
     # Success envelope:
-    #   {
-    #     "data": <payload>,
-    #     "meta": { "request_id": "...", "timestamp": "..." }
-    #   }
+    #   { "data": <payload> }
     #
     # Error envelope:
-    #   {
-    #     "error": {
-    #       "code": "VALIDATION_ERROR",
-    #       "message": "...",
-    #       "details": {...},
-    #       "request_id": "..."
-    #     }
-    #   }
+    #   { "error": { "code": "...", "message": "...", "details": {...}, "request_id": "..." } }
     module Builder
       module_function
 
-      def success(data: nil, status: 200, meta: {})
-        body = { data: data }
-        body[:meta] = default_meta.merge(meta) unless default_meta.empty? && meta.empty?
-        [status, body.to_json]
+      def success(data: nil, status: 200)
+        [status, { data: data }.to_json]
       end
 
       def created(data: nil)
@@ -47,10 +35,6 @@ module SinatraBoilerplate
         }
         payload[:error][:details] = details unless details.nil? || details.empty?
         [status, payload.to_json]
-      end
-
-      def default_meta
-        {}
       end
     end
   end

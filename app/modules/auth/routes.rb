@@ -76,7 +76,7 @@ module SinatraBoilerplate
 
               raise SinatraBoilerplate::Errors::ValidationError.new(
                 'Validation failed',
-                details: result.errors(full: true).to_h
+                result.errors(full: true).to_h
               )
             end
           end

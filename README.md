@@ -93,7 +93,6 @@ The server will be listening on `http://localhost:4567`. Try `curl http://localh
 | HTTP protection      | rack-protection                       |
 | Tests                | RSpec, rack-test, factory_bot, faker  |
 | Code style           | rubocop, rubocop-rspec                |
-| Background jobs      | Redis (optional)                      |
 | Documentation        | OpenAPI 3.1 (hand-written)            |
 | Containerization     | Docker, docker-compose                |
 

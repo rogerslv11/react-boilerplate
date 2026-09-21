@@ -3,15 +3,14 @@
 module SinatraBoilerplate
   module Modules
     module Health
-      # Health-check endpoints. They verify the application can connect to
+      # Health check endpoints. They verify the application can connect to
       # PostgreSQL and respond with a simple status payload.
       module Routes
         def self.registered(app)
           app.get '/health' do
             database_ok = SinatraBoilerplate::Database.connected?
-            redis_ok = true
 
-            status_code = database_ok && redis_ok ? 200 : 503
+            status_code = database_ok ? 200 : 503
             SinatraBoilerplate::Responses::Builder.success(
               status: status_code,
               data: {
@@ -20,8 +19,7 @@ module SinatraBoilerplate
                 environment: SinatraBoilerplate::Env.env,
                 uptime_seconds: (Time.now - STARTED_AT).round,
                 checks: {
-                  database: database_ok ? 'ok' : 'down',
-                  redis: redis_ok ? 'ok' : 'down'
+                  database: database_ok ? 'ok' : 'down'
                 }
               }
             )

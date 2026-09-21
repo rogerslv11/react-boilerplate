@@ -8,7 +8,6 @@ require_relative '../app'
 require 'rspec'
 require 'rack/test'
 require 'factory_bot'
-require 'faker'
 
 # Require support files and factories
 Dir[File.expand_path('support/**/*.rb', __dir__)].sort.each { |f| require f }
