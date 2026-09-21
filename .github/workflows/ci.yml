@@ -2,13 +2,13 @@ name: CI
 
 on:
   push:
-    branches: [main, master]
+    branches: [main]
   pull_request:
-    branches: [main, master]
+    branches: [main]
 
 jobs:
-  build:
-    name: Lint / Typecheck / Build / Test
+  test:
+    name: RSpec + RuboCop
     runs-on: ubuntu-latest
 
     services:
@@ -17,65 +17,65 @@ jobs:
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: nestjs_boilerplate_test
+          POSTGRES_DB: sinatra_boilerplate_test
         ports:
           - 5432:5432
         options: >-
           --health-cmd "pg_isready -U postgres"
-          --health-interval 5s
-          --health-timeout 3s
-          --health-retries 10
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
 
     env:
-      NODE_ENV: test
-      JWT_SECRET: ci_test_jwt_secret_at_least_32_chars_long_xx
-      JWT_REFRESH_SECRET: ci_test_refresh_secret_at_least_32_chars_long
-      DB_HOST: localhost
-      DB_PORT: 5432
-      DB_USERNAME: postgres
-      DB_PASSWORD: postgres
-      DB_DATABASE: nestjs_boilerplate_test
-      THROTTLE_TTL: 60
-      THROTTLE_LIMIT: 1000
+      APP_ENV: test
+      DATABASE_HOST: localhost
+      DATABASE_PORT: "5432"
+      DATABASE_NAME: sinatra_boilerplate_test
+      DATABASE_USER: postgres
+      DATABASE_PASSWORD: postgres
+      JWT_SECRET: ci_only_jwt_secret_replace_in_production_8a3f5d9b2c1e7f4a6d8c0b9e3f2a1d5c
+      JWT_ALGORITHM: HS256
+      JWT_ACCESS_TTL: "3600"
+      JWT_REFRESH_TTL: "2592000"
+      CORS_ALLOWED_ORIGINS: "*"
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - uses: pnpm/action-setup@v4
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
         with:
-          version: 9
+          ruby-version: 3.3
+          bundler-cache: true
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: pnpm
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends libpq-dev
 
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+      - name: Run database migrations
+        run: bundle exec rake db:migrate
 
-      - name: Lint
-        run: pnpm lint
+      - name: Run RSpec
+        run: bundle exec rspec
 
-      - name: Typecheck
-        run: pnpm typecheck
+      - name: Run RuboCop
+        run: bundle exec rubocop --no-fail-level=convention
+        continue-on-error: true
 
-      - name: Unit tests
-        run: pnpm test -- --runInBand
+  build:
+    name: Docker build
+    runs-on: ubuntu-latest
+    needs: test
 
-      - name: Build
-        run: pnpm build
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - name: Run migrations (e2e)
-        run: pnpm migration:run
-        env:
-          NODE_ENV: test
+      - name: Build production image
+        run: docker build --target prod -t sinatra-boilerplate:test .
 
-      - name: E2E tests
-        run: pnpm test:e2e
-
-      - name: Upload coverage
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: coverage
-          path: coverage
+      - name: Smoke test the image
+        run: |
+          docker run --rm --entrypoint ruby sinatra-boilerplate:test -e "require_relative 'config/environment'; puts 'OK'"

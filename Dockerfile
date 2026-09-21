@@ -1,66 +1,90 @@
-# syntax=docker/dockerfile:1.7
-# ---------- Stage 1: Dependencies (dev + prod) ----------
-FROM node:22-bookworm-slim AS deps
+# syntax = docker/dockerfile:1.7
+
+# ----------------------------------------------------------------------------
+# Stage 1: base — install Ruby and project gems
+# ----------------------------------------------------------------------------
+FROM ruby:3.3-slim-bookworm AS base
+
+ENV BUNDLE_PATH=/usr/local/bundle \
+    BUNDLE_JOBS=4 \
+    BUNDLE_RETRY=3 \
+    BUNDLE_WITHOUT='development:test' \
+    LANG=C.UTF-8 \
+    LC_ALL=C.UTF-8
+
+RUN apt-get update -qq && \
+    apt-get install -y --no-install-recommends \
+        build-essential \
+        libpq-dev \
+        libyaml-dev \
+        postgresql-client \
+        curl \
+        tini && \
+    rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
 
-ENV PNPM_HOME="/pnpm"
-ENV PATH="$PNPM_HOME:$PATH"
-RUN corepack enable && corepack prepare pnpm@9.15.0 --activate
+# Install gems first to leverage Docker layer caching
+COPY Gemfile Gemfile.lock ./
+RUN bundle config set --local path "${BUNDLE_PATH}" && \
+    bundle install --jobs ${BUNDLE_JOBS} --retry ${BUNDLE_RETRY}
 
-COPY package.json pnpm-lock.yaml* .npmrc* ./
-RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
-    pnpm install --frozen-lockfile
+# ----------------------------------------------------------------------------
+# Stage 2: dev — full toolchain, used for development with hot reload
+# ----------------------------------------------------------------------------
+FROM base AS dev
 
-# ---------- Stage 2: Build ----------
-FROM node:22-bookworm-slim AS builder
-WORKDIR /app
+ENV BUNDLE_WITHOUT='' \
+    APP_ENV=development
 
-ENV PNPM_HOME="/pnpm"
-ENV PATH="$PNPM_HOME:$PATH"
-RUN corepack enable && corepack prepare pnpm@9.15.0 --activate
+RUN apt-get update -qq && \
+    apt-get install -y --no-install-recommends git && \
+    rm -rf /var/lib/apt/lists/*
 
-COPY --from=deps /app/node_modules ./node_modules
-COPY package.json pnpm-lock.yaml* tsconfig*.json nest-cli.json ./
-COPY src ./src
+COPY . .
 
-RUN pnpm build
-
-# ---------- Stage 3: Production dependencies ----------
-FROM node:22-bookworm-slim AS prod-deps
-WORKDIR /app
-
-ENV PNPM_HOME="/pnpm"
-ENV PATH="$PNPM_HOME:$PATH"
-RUN corepack enable && corepack prepare pnpm@9.15.0 --activate
-
-COPY package.json pnpm-lock.yaml* ./
-RUN --mount=type=cache,id=pnpm-prod,target=/pnpm/store \
-    pnpm install --frozen-lockfile --prod
-
-# ---------- Stage 4: Production runner ----------
-FROM node:22-bookworm-slim AS runner
-WORKDIR /app
-
-ENV NODE_ENV=production
-ENV PORT=3000
-
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    curl ca-certificates tini \
-    && rm -rf /var/lib/apt/lists/*
-
-RUN groupadd --system --gid 1001 nodejs \
- && useradd --system --uid 1001 --gid nodejs --home /app --shell /sbin/nologin nestjs
-
-COPY --from=prod-deps /app/node_modules ./node_modules
-COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/package.json ./package.json
-
-USER nestjs
-
-EXPOSE 3000
-
-HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
-    CMD curl -fsS "http://127.0.0.1:${PORT}/api/v1/health" || exit 1
+EXPOSE 4567
 
 ENTRYPOINT ["/usr/bin/tini", "--"]
-CMD ["node", "dist/main.js"]
+CMD ["bundle", "exec", "puma", "-C", "config/puma.rb", "-b", "tcp://0.0.0.0:4567"]
+
+# ----------------------------------------------------------------------------
+# Stage 3: prod — production image, runs as non-root, slim
+# ----------------------------------------------------------------------------
+FROM base AS prod
+
+ENV APP_ENV=production \
+    APP_HOST=0.0.0.0 \
+    APP_PORT=4567 \
+    RAILS_SERVE_STATIC_FILES=true
+
+COPY . .
+
+# Create non-root user
+RUN groupadd --system --gid 1000 app && \
+    useradd --system --uid 1000 --gid app --shell /bin/bash --create-home app && \
+    chown -R app:app /app && \
+    mkdir -p /app/tmp/pids /app/log && \
+    chown -R app:app /app/tmp /app/log
+
+USER app
+
+EXPOSE 4567
+
+ENTRYPOINT ["/usr/bin/tini", "--"]
+CMD ["bundle", "exec", "puma", "-C", "config/puma.rb"]
+
+# ----------------------------------------------------------------------------
+# Stage 4: test — runs the RSpec suite
+# ----------------------------------------------------------------------------
+FROM base AS test
+
+ENV APP_ENV=test \
+    BUNDLE_WITHOUT=''
+
+RUN bundle config set --local without ''
+
+COPY . .
+
+ENTRYPOINT ["/usr/bin/tini", "--"]
+CMD ["bundle", "exec", "rspec"]

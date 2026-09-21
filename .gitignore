@@ -1,55 +1,58 @@
-# Dependencies
-node_modules/
-.pnpm-store/
-
-# Build output
-dist/
-build/
-*.tsbuildinfo
-
+# ----------------------------------------------------------------------------
 # Logs
-logs/
-*.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-lerna-debug.log*
+# ----------------------------------------------------------------------------
+log/*.log
+log/*.gz
 
-# Tests
-coverage/
-.nyc_output/
-
-# Environment files (keep .env.example)
+# ----------------------------------------------------------------------------
+# Environment
+# ----------------------------------------------------------------------------
 .env
-.env.local
-.env.*.local
-.env.development.local
-.env.test.local
-.env.production.local
+.env.*
+!.env.example
 
-# IDEs and editors
-.idea/
-.vscode/*
-!.vscode/settings.json
-!.vscode/tasks.json
-!.vscode/launch.json
-!.vscode/extensions.json
+# ----------------------------------------------------------------------------
+# Temporary files
+# ----------------------------------------------------------------------------
+tmp/
+*.tmp
+*.bak
 *.swp
 *.swo
 .DS_Store
-Thumbs.db
+coverage/
 
-# OS
-.DS_Store
+# ----------------------------------------------------------------------------
+# Ruby / Bundler
+# ----------------------------------------------------------------------------
+.bundle/
+vendor/bundle/
+Gemfile.lock.bak
 
-# Temporary
-tmp/
-out-tsc/
-*.tgz
+# ----------------------------------------------------------------------------
+# RSpec / Test artifacts
+# ----------------------------------------------------------------------------
+spec/examples.txt
+spec/diff.txt
+.rspec_status
+coverage/
+.simplecov
 
-# Docker
-docker-compose.override.yml
+# ----------------------------------------------------------------------------
+# RuboCop
+# ----------------------------------------------------------------------------
+.rubocop_cache/
+.rubocop_todo.yml
 
-# pnpm
-pnpm-workspace.yaml
+# ----------------------------------------------------------------------------
+# IDEs / Editors
+# ----------------------------------------------------------------------------
+.idea/
+.vscode/
+*.iml
+
+# ----------------------------------------------------------------------------
+# Docker / Infra
+# ----------------------------------------------------------------------------
+data/
+docker/data/

@@ -1,0 +1,100 @@
+AllCops:
+  NewCops: disable
+  TargetRubyVersion: 3.2
+  TargetRailsVersion: 8.1
+  DisabledByDefault: true
+  SuggestExtensions: false
+  require:
+    - rubocop-rspec
+    - rubocop-performance
+  Exclude:
+    - "db/migrate/*"
+    - "vendor/**/*"
+    - "tmp/**/*"
+    - "bin/**/*"
+    - "node_modules/**/*"
+    - "spec/spec_helper.rb"
+    - "spec/rails_helper.rb"
+    - "lib/**/tasks/**/*"
+
+Layout:
+  Enabled: true
+  Layout/LineLength:
+    Enabled: true
+    Max: 120
+    Exclude:
+      - "spec/**/*"
+  Layout/IndentationConsistency:
+    EnforcedStyle: normal
+  Layout/HashAlignment:
+    EnforcedHashRocketStyle: key
+    EnforcedColonStyle: key
+
+Style:
+  Enabled: true
+  Style/FrozenStringLiteralComment:
+    Enabled: true
+    EnforcedStyle: always
+  Style/StringLiterals:
+    EnforcedStyle: single_quotes
+  Style/Documentation:
+    Enabled: false
+  Style/ClassAndModuleChildren:
+    Enabled: true
+    EnforcedStyle: nested
+  Style/WordArray:
+    EnforcedStyle: brackets
+  Style/SymbolArray:
+    EnforcedStyle: brackets
+  Style/HashSyntax:
+    EnforcedStyle: ruby19
+    EnforcedShorthandSyntax: always
+  Style/RedundantReturn:
+    Enabled: true
+    AllowMultipleReturnValues: true
+
+Metrics:
+  Enabled: true
+  Metrics/MethodLength:
+    Max: 25
+    CountComments: false
+    Exclude:
+      - "spec/**/*"
+  Metrics/AbcSize:
+    Enabled: false
+  Metrics/ClassLength:
+    Max: 150
+    Exclude:
+      - "spec/**/*"
+  Metrics/BlockLength:
+    Exclude:
+      - "spec/**/*"
+      - "config/**/*"
+      - "lib/core/**/*"
+      - "*.gemspec"
+      - "Rakefile"
+  Metrics/CyclomaticComplexity:
+    Max: 8
+  Metrics/PerceivedComplexity:
+    Max: 8
+
+Bundler:
+  Enabled: true
+  Bundler/OrderedGems:
+    Enabled: true
+
+Naming:
+  Enabled: true
+  Naming/FileName:
+    MatchDirectories: false
+
+Security:
+  Enabled: true
+  Security/Open:
+    Enabled: false
+
+Style/RescueModifier:
+  Enabled: false
+
+Style/MixinUsage:
+  Enabled: false
