@@ -45,7 +45,7 @@ It ships with a complete development experience: typed end-to-end, modular archi
 
 ### Requirements
 
-- **Node.js ≥ 18.18**
+- **Node.js ≥ 20** (CI runs on Node 22)
 - **pnpm ≥ 9** (preferred). `npm` and `yarn` also work.
 
 ### Install
